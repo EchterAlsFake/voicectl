@@ -114,6 +114,7 @@ class VoiceCtlDaemon:
             "mode": self.mode,
             "microphone": get_default_microphone_name(),
             "asr_backend": self.asr.backend_name,
+            "model": getattr(self.config.asr, "model", "default"),
             "inference_device": self.asr.device_name,
             "vad": "active" if self.audio.is_active() else "inactive",
             "last_command": self.last_command,

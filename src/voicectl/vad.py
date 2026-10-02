@@ -23,8 +23,8 @@ class SileroVADDetector:
         self.sample_rate = sample_rate
 
         # Hysteresis thresholds for crisp boundaries
-        self.start_threshold = max(0.55, config.threshold)
-        self.end_threshold = max(0.20, config.threshold - 0.20)  # e.g. 0.35 when threshold=0.55
+        self.start_threshold = float(config.threshold)
+        self.end_threshold = max(0.15, self.start_threshold - 0.20)
 
         self.silence_timeout_chunks = max(3, int((config.silence_timeout_ms / 1000.0) * sample_rate / 512))
         self.min_speech_chunks = max(2, int((config.min_speech_duration_ms / 1000.0) * sample_rate / 512))
@@ -131,7 +131,7 @@ class SileroVADDetector:
 
         utterance = np.concatenate(chunks).astype(np.float32)
         rms = float(np.sqrt(np.mean(utterance**2)))
-        if rms < 0.003:
+        if rms < 0.001:
             logger.debug("Discarding near-silent utterance (RMS=%.5f)", rms)
             return None
 

@@ -58,6 +58,8 @@ class AudioCapture:
         blocks_in_pre_roll = max(1, int((pre_roll_ms / 1000.0) * self.sample_rate / self.block_size))
         self.pre_roll = collections.deque(maxlen=blocks_in_pre_roll)
 
+        self.gain = float(getattr(config, "gain", 1.0))
+
         self._queue: queue.Queue[np.ndarray | None] = queue.Queue(maxsize=100)
         self._stream: sd.InputStream | None = None
         self._running = False
@@ -71,6 +73,8 @@ class AudioCapture:
 
         # indata is float32 shape (frames, channels)
         chunk = indata[:, 0].copy()
+        if self.gain != 1.0:
+            chunk = chunk * self.gain
         try:
             self._queue.put_nowait(chunk)
         except queue.Full:

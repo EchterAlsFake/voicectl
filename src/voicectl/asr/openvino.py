@@ -21,12 +21,21 @@ class OpenVINOASR(ASRBackend):
 
     def __init__(self, config: ASRConfig) -> None:
         self.config = config
-        self.model_path = str(Path(config.model_path).expanduser())
+        self.model_path = config.resolve_model_path()
         self.cache_dir = str(Path(config.cache_dir).expanduser())
         os.makedirs(self.cache_dir, exist_ok=True)
 
         self._active_device = config.preferred_device.upper()
         self._pipe: ov_genai.WhisperPipeline | None = None
+
+        # Precompute 80 Hz high-pass filter if enabled
+        self._sos = None
+        if getattr(config, "highpass_filter", True):
+            try:
+                import scipy.signal as signal
+                self._sos = signal.butter(2, 80, btype="highpass", fs=16000, output="sos")
+            except Exception as e:
+                logger.debug("Failed to initialize high-pass filter: %s", e)
 
         self._init_pipeline()
 
@@ -84,6 +93,24 @@ class OpenVINOASR(ASRBackend):
         if audio.ndim > 1:
             audio = audio.mean(axis=1)
         audio = np.ascontiguousarray(audio, dtype=np.float32)
+
+        # 1. DC offset cancellation
+        audio = audio - np.mean(audio)
+
+        # 2. 80 Hz high-pass filter to reject room rumble and laptop fan vibration
+        if self._sos is not None:
+            try:
+                import scipy.signal as signal
+                audio = signal.sosfilt(self._sos, audio).astype(np.float32)
+            except Exception as e:
+                logger.debug("Highpass filter failed: %s", e)
+
+        # 3. Software AGC / Peak normalization:
+        # Scales distant or quiet speech so Whisper mel filterbanks receive nominal signal level
+        if getattr(self.config, "normalize_audio", True):
+            peak = float(np.max(np.abs(audio)))
+            if peak > 1e-4:
+                audio = (audio / peak) * 0.92
 
         # Pad very short audio to at least 0.5s (8000 samples) for reliable mel filterbank
         if len(audio) < 8000:

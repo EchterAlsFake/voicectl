@@ -83,6 +83,7 @@ def cmd_status(args: argparse.Namespace) -> None:
         print(f"Mode:             {data.get('mode', 'unknown').upper()}")
         print(f"Microphone:       {data.get('microphone', 'unknown')}")
         print(f"ASR backend:      {data.get('asr_backend', 'unknown')}")
+        print(f"Model:            {data.get('model', 'unknown')}")
         print(f"Inference device: {data.get('inference_device', 'unknown')}")
         print(f"VAD:              {data.get('vad', 'unknown')}")
         print(f"Last command:     {data.get('last_command', 'none')}")
