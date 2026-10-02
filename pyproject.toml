@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voicectl"
+version = "0.1.0"
+description = "Fast, local, offline voice-control system optimized for Arch Linux, Hyprland, and Intel NPU"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Asuna", email = "asuna@zenbook-arch.local" }
+]
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=1.24.0",
+    "sounddevice>=0.4.6",
+    "soundfile>=0.12.1",
+    "pyyaml>=6.0",
+    "silero-vad>=6.2.0",
+]
+
+[project.optional-dependencies]
+openvino = [
+    "openvino>=2024.0.0",
+    "openvino-genai>=2024.0.0",
+]
+test = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+voicectl = "voicectl.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

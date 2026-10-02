@@ -1,0 +1,50 @@
+# voicectl configuration file
+# Default location: ~/.config/voicectl/config.toml
+
+[general]
+# Startup mode: "presentation", "normal", or "off"
+default_mode = "presentation"
+
+# Wake word for normal mode (e.g. "computer volume up")
+wake_word = "computer"
+require_wake_word_normal = false
+
+# Desktop notifications via notify-send
+notify_on_mode_change = true
+notify_on_command = false
+log_level = "INFO"
+
+[audio]
+# Input device name or index, or "default" for PipeWire default microphone
+device = "default"
+sample_rate = 16000
+channels = 1
+block_size = 512
+
+[vad]
+# Silero VAD (ONNX)
+threshold = 0.5
+silence_timeout_ms = 400
+min_speech_duration_ms = 180
+max_speech_duration_s = 8.0
+pre_roll_ms = 300
+
+[asr]
+# Speech recognition backend
+backend = "openvino"
+model_path = "/home/asuna/whisper.cpp/whisper-base-ov"
+# Hardware inference device priority: NPU -> CPU fallback
+preferred_device = "NPU"
+fallback_device = "CPU"
+language = "en"
+cache_dir = "~/.cache/voicectl/ov_cache"
+
+[volume]
+# Volume change step for WirePlumber (0.05 = 5%)
+step = 0.05
+# Maximum volume cap (1.0 = 100%)
+limit = 1.0
+
+[paths]
+commands_file = "~/.config/voicectl/commands.yaml"
+scripts_dir = "~/.config/voicectl/scripts"

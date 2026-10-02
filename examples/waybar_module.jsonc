@@ -1,0 +1,12 @@
+// Example Waybar custom module configuration for voicectl
+// Add this to your ~/.config/waybar/config.jsonc
+
+"custom/voicectl": {
+    "format": "MIC: {text}",
+    "return-type": "json",
+    "exec": "python -c 'import json, subprocess; res = subprocess.run([\"voicectl\", \"status\"], capture_output=True, text=True).stdout; mode = \"OFF\";\nfor l in res.splitlines():\n  if \"Mode:\" in l: mode = l.split(\":\")[1].strip()\nprint(json.dumps({\"text\": mode, \"class\": mode.lower(), \"tooltip\": res}))'",
+    "interval": 2,
+    "on-click": "voicectl mode normal",
+    "on-click-right": "voicectl mode presentation",
+    "on-click-middle": "voicectl mode off"
+}

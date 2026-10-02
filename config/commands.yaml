@@ -1,0 +1,233 @@
+# voicectl command mappings
+# Default location: ~/.config/voicectl/commands.yaml
+#
+# Supported action types:
+#   key:      Simulates Wayland keypress via wtype (key: Right, Left, F5, Escape, space, etc.)
+#   volume:   WirePlumber volume action (action: up | down | mute, step: 0.05, limit: 1.0)
+#   media:    MPRIS media playback (command: play | pause | play-pause | next | previous)
+#   hyprland: Safe Hyprland dispatcher (dispatcher: fullscreen | workspace, args: "")
+#   script:   Explicit safe script file execution (path: ~/.config/voicectl/scripts/myscript.sh)
+
+commands:
+  next_slide:
+    description: "Advance to next slide"
+    action:
+      type: key
+      key: Right
+    phrases:
+      - "next slide"
+      - "next slides"
+      - "next"
+      - "continue"
+      - "go forward"
+      - "forward"
+      - "advance slide"
+    profiles:
+      - presentation
+      - normal
+
+  previous_slide:
+    description: "Go back to previous slide"
+    action:
+      type: key
+      key: Left
+    phrases:
+      - "previous slide"
+      - "previous slides"
+      - "previous"
+      - "back"
+      - "go back"
+      - "last slide"
+      - "slide back"
+    profiles:
+      - presentation
+      - normal
+
+  start_presentation:
+    description: "Start presentation slideshow"
+    action:
+      type: key
+      key: F5
+    phrases:
+      - "start presentation"
+      - "start slideshow"
+      - "play presentation"
+      - "presentation mode"
+    profiles:
+      - presentation
+      - normal
+
+  exit_presentation:
+    description: "Exit presentation slideshow"
+    action:
+      type: key
+      key: Escape
+    phrases:
+      - "exit presentation"
+      - "stop presentation"
+      - "close presentation"
+      - "end presentation"
+      - "escape"
+    profiles:
+      - presentation
+      - normal
+
+  black_screen:
+    description: "Toggle black screen during presentation"
+    action:
+      type: key
+      key: b
+    phrases:
+      - "black screen"
+      - "blank screen"
+      - "black"
+    profiles:
+      - presentation
+
+  white_screen:
+    description: "Toggle white screen during presentation"
+    action:
+      type: key
+      key: w
+    phrases:
+      - "white screen"
+      - "white"
+    profiles:
+      - presentation
+
+  volume_up:
+    description: "Raise audio volume"
+    action:
+      type: volume
+      action: up
+      step: 0.05
+      limit: 1.0
+    phrases:
+      - "volume up"
+      - "turn volume up"
+      - "turn the volume up"
+      - "make it louder"
+      - "louder"
+      - "increase volume"
+      - "raise volume"
+      - "turn it up"
+      - "sound up"
+    profiles:
+      - presentation
+      - normal
+
+  volume_down:
+    description: "Lower audio volume"
+    action:
+      type: volume
+      action: down
+      step: 0.05
+      limit: 1.0
+    phrases:
+      - "volume down"
+      - "turn volume down"
+      - "turn the volume down"
+      - "make it quieter"
+      - "quieter"
+      - "decrease volume"
+      - "lower volume"
+      - "turn it down"
+      - "sound down"
+    profiles:
+      - presentation
+      - normal
+
+  mute:
+    description: "Toggle audio mute"
+    action:
+      type: volume
+      action: mute
+    phrases:
+      - "mute"
+      - "unmute"
+      - "toggle mute"
+      - "mute audio"
+      - "silence"
+      - "mute the sound"
+    profiles:
+      - presentation
+      - normal
+
+  play:
+    description: "Resume media playback"
+    action:
+      type: media
+      command: play
+    phrases:
+      - "play"
+      - "resume"
+      - "play music"
+      - "start music"
+      - "resume playback"
+      - "start playback"
+    profiles:
+      - presentation
+      - normal
+
+  pause:
+    description: "Pause media playback"
+    action:
+      type: media
+      command: pause
+    phrases:
+      - "pause"
+      - "pause music"
+      - "stop music"
+      - "pause playback"
+      - "stop playback"
+    profiles:
+      - presentation
+      - normal
+
+  play_pause:
+    description: "Toggle media play/pause"
+    action:
+      type: media
+      command: play-pause
+    phrases:
+      - "play pause"
+      - "toggle playback"
+    profiles:
+      - normal
+
+  next_track:
+    description: "Skip to next media track"
+    action:
+      type: media
+      command: next
+    phrases:
+      - "next track"
+      - "next song"
+      - "skip track"
+      - "skip song"
+    profiles:
+      - normal
+
+  previous_track:
+    description: "Return to previous media track"
+    action:
+      type: media
+      command: previous
+    phrases:
+      - "previous track"
+      - "previous song"
+      - "last song"
+      - "track back"
+    profiles:
+      - normal
+
+  fullscreen:
+    description: "Toggle active window fullscreen"
+    action:
+      type: hyprland
+      dispatcher: fullscreen
+    phrases:
+      - "fullscreen"
+      - "toggle fullscreen"
+    profiles:
+      - normal

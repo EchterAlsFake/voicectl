@@ -1,0 +1,22 @@
+[Unit]
+Description=voicectl - Local offline voice-control daemon
+Documentation=https://github.com/asuna/voicectl
+PartOf=graphical-session.target
+After=graphical-session.target pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+ExecStart=/home/asuna/.venv/bin/python -m voicectl.cli run
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=5s
+
+# Allow service to inherit Wayland & Hyprland environment
+PassEnvironment=WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_RUNTIME_DIR HYPRLAND_INSTANCE_SIGNATURE DBUS_SESSION_BUS_ADDRESS
+
+# Clean logging to systemd user journal
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical-session.target default.target
