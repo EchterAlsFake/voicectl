@@ -1,0 +1,19 @@
+{
+    "id": "voicectl",
+    "name": "Voice Control",
+    "description": "Offline voice control system with Intel NPU acceleration and mode switching",
+    "version": "1.0.0",
+    "license": "MIT",
+    "author": "asuna",
+    "icon": "mic",
+    "type": "widget",
+    "capabilities": ["voicectl", "dankbar-widget", "control-center"],
+    "component": "./Voicectl.qml",
+    "settings": "./VoicectlSettings.qml",
+    "requires_dms": ">=1.4.0",
+    "permissions": [
+        "settings_read",
+        "settings_write",
+        "process"
+    ]
+}

@@ -1,110 +1,178 @@
 # voicectl
 
-Fast, local, offline voice-control system designed for Arch Linux, Hyprland, and Intel Core Ultra 7 (Lunar Lake) NPU acceleration via OpenVINO.
+Fast, local, offline voice-control daemon engineered for Arch Linux, Hyprland, and Intel Core Ultra (Lunar Lake / Meteor Lake) NPU acceleration via OpenVINO.
+
+Designed specifically for low-latency hands-free presentation control and desktop media management with zero cloud telemetry and strict security allowlisting.
 
 ---
 
-## Features
+## Key Highlights
 
-- **Intel Lunar Lake NPU Acceleration**: Whisper speech recognition runs on the integrated Intel NPU via OpenVINO GenAI, delivering end-to-end command latencies around **140–200 ms** with virtually zero CPU usage during inference.
-- **Automatic CPU Fallback**: Automatically switches to CPU inference if NPU hardware/driver is unavailable.
-- **Silero VAD (ONNX)**: Lightweight Voice Activity Detection runs in **<0.3 ms** per chunk with ring-buffered pre-roll, preventing syllable clipping and reducing idle CPU usage to ~4%.
-- **Wayland Native Input Injection**: Uses `wtype` over the Wayland virtual-keyboard protocol (`zwp_virtual_keyboard_v1`) without requiring `/dev/uinput` root permissions or X11 tools.
-- **Safe & Allowlisted**: No arbitrary shell command execution (`shell=True` is prohibited). All actions (keys, audio volume, media, Hyprland dispatchers) are explicitly mapped and allowlisted.
-- **PipeWire & WirePlumber Integration**: Volume control via `wpctl` with customizable volume steps and max volume ceiling limit (default 100%).
-- **MPRIS Media Player Control**: Seamless integration with `playerctl` for play, pause, play-pause, next track, and previous track.
-- **Systemd User Service**: Starts automatically in the user graphical session, logs to journalctl, and maintains IPC over a local UNIX socket.
-- **Hyprland Keybindings**: Instant mode switching via Hyprland bindings (`SUPER + ALT + V`, `SUPER + ALT + P`, `SUPER + ALT + O`).
+- **Hardware NPU Acceleration**: Whisper speech recognition runs on the integrated Intel NPU via OpenVINO GenAI, achieving inference latencies around **270–310 ms** (`whisper-small-ov`) or **~120 ms** (`whisper-base-ov`) with virtually zero CPU overhead.
+- **Far-Field Audio Pipeline**:
+  - **Software AGC / Peak Normalization**: Automatically normalizes distant speech to nominal Whisper dynamic range so you can control slides from across the room (2–4 meters away).
+  - **80 Hz Butterworth High-Pass Filter**: Strips sub-audible room rumble, table vibrations, and laptop fan noise prior to AGC amplification.
+- **Low-Latency Voice Activity Detection**: Silero VAD (ONNX) runs in **<0.3 ms** per 512-sample chunk with dual-threshold hysteresis and pre-roll ring buffering to eliminate syllable clipping.
+- **Ultra-Low Idle Power (5W Baseline)**:
+  - In `OFF` mode, the PipeWire audio input node is completely released, allowing the Intel SoundWire / Audio DSP to enter **D3cold** state and the CPU to drop into package **C8/C10** sleep (0.00% daemon CPU).
+  - The CLI client (`/usr/local/bin/voicectl`) features an instant C-socket IPC path that queries status in **~30–40 ms** with zero Python ML library import overhead.
+- **Wayland Native Virtual Keyboard**: Dispatches keystrokes via `wtype` over the native Wayland virtual keyboard protocol (`zwp_virtual_keyboard_v1`). No `/dev/uinput` root permissions or legacy X11 tools required.
+- **Strict Security Allowlisting**: **`shell=True` is prohibited**. Spoken phrases can only trigger explicitly configured actions (`key`, `volume`, `media`, `hyprland`, or pre-configured scripts). Arbitrary spoken shell execution is impossible.
+- **Quickshell & DankMaterialShell (DMS) Widget**: Includes a ready-to-use status bar widget with live mode display, single-click toggle, and popout diagnostics.
+
+---
+
+## Hardware & System Requirements
+
+| Component | Minimum / Recommended |
+|---|---|
+| **CPU / Platform** | Intel Core Ultra 7 258V (Lunar Lake) or Intel Core Ultra (Meteor Lake / Arrow Lake). Seamless CPU fallback automatically engages if no NPU is found. |
+| **NPU Device** | Intel NPU 4 / 3 (`/dev/accel/accel*`) via `intel-npu-driver` (Linux kernel 6.10+ `intel_vpu` driver). |
+| **RAM** | 16 GB minimum (32 GB recommended for `whisper-large-turbo-ov` NPU caching). |
+| **OS / Distribution** | Arch Linux (or any modern Linux distribution with systemd). |
+| **Compositor / Display** | Hyprland / Wayland compositor supporting `zwp_virtual_keyboard_v1`. |
+| **Audio Server** | PipeWire with WirePlumber (`wpctl`). |
+| **Python** | Python 3.11 – 3.14 (managed via `uv`). |
+
+---
+
+## Benchmark Comparison on Intel Lunar Lake NPU
+
+Models run on `/dev/accel/accel0` using OpenVINO GenAI with pre-compiled model blob caching in `~/.cache/voicectl/ov_cache`:
+
+| Model Preset | Parameters | Cached Startup | NPU Inference | Total Turnaround | Best Use Case |
+|---|---|---|---|---|---|
+| **`whisper-base-ov`** | 74M | 0.60 s | **~120 ms** | ~350 ms | Ultra-fast baseline; ideal close-up |
+| **`whisper-small-ov`** *(Default)* | 244M | 0.90 s | **~280–310 ms** | **~500 ms** | **Sweet spot**: robust far-field capture, accents, reverb |
+| **`whisper-large-turbo-ov`** | 809M | 0.95 s | **~560–600 ms** | ~780 ms | Maximum accuracy, complex natural language |
 
 ---
 
 ## Operating Modes
 
-1. **Presentation Mode (`presentation`)**:
+1. **Presentation Mode (`presentation`)** *(Default)*:
    - **No wake word required**.
-   - Optimized for standing away from the laptop during presentations (LibreOffice Impress, Chromium/Firefox web slides, PDF viewers).
-   - Conservative matching: strict full-utterance matching prevents accidental triggering from conversational speech (e.g. *"on the next slide..."* will **not** trigger).
-   - Available commands: Next slide, previous slide, start presentation, exit presentation, black screen, white screen, volume up/down, mute, pause/play.
+   - Tuned for standing away from the laptop during presentations (LibreOffice Impress, PDF viewers, Chromium / Firefox presentation decks).
+   - Conservative full-phrase matching prevents conversational speech from accidentally advancing slides.
+   - Core commands: *Next slide*, *previous slide*, *start presentation*, *exit presentation*, *black screen*, *volume up/down*, *mute*.
 
 2. **Normal Mode (`normal`)**:
-   - For desktop and media control.
-   - Supports natural speech phrasing (e.g., *"turn the volume up"*, *"make it a little louder"*, *"pause the music"*).
-   - Optional configurable wake word (e.g., *"computer volume up"*).
+   - Conversational desktop control.
+   - Supports natural speech variants (*"turn the volume up"*, *"make it a little louder"*, *"pause music"*).
+   - Configurable wake word support (e.g. *"computer volume up"*).
 
 3. **Off Mode (`off`)**:
-   - Daemon remains active but audio input is ignored without running speech recognition.
+   - Hardware completely powered down.
+   - PipeWire recording stream is terminated; Intel SoundWire DSP enters **D3cold** state.
+   - Daemon sleeps with **0.00% CPU**.
 
 ---
 
-## CLI Usage
+## Installation
+
+### 1. Install System Dependencies (Arch Linux)
 
 ```bash
-# Manage daemon service
-voicectl start              # Start systemd user service
-voicectl stop               # Stop systemd user service
-voicectl status             # Display live service, NPU, mic, and latency status
+sudo pacman -S --needed \
+  intel-npu-driver \
+  openvino \
+  pipewire \
+  wireplumber \
+  playerctl \
+  wtype \
+  git
+```
 
-# Change operating modes
-voicectl mode presentation  # Switch to presentation mode (no wake word)
-voicectl mode normal        # Switch to normal desktop mode
-voicectl mode off           # Mute/disable voice control
+Ensure your user belongs to the `render` group to access the NPU:
 
-# Diagnostics & Testing
-voicectl devices            # List available audio input devices
-voicectl test-mic           # Record 2s sample and test mic input level
-voicectl test-asr           # Test speech recognition on microphone or audio file
-voicectl test-command "next slide"  # Test command normalization, matching, and action
+```bash
+sudo usermod -aG render $USER
+```
 
-# Foreground debugging
-voicectl run                # Run daemon directly in the terminal
+### 2. Clone and Setup Python Environment
+
+```bash
+git clone https://github.com/EchterAlsFake/voicectl.git
+cd voicectl
+
+# Create virtualenv using uv
+uv venv ~/.venv
+source ~/.venv/bin/activate
+
+# Install voicectl in editable mode
+uv pip install -e .
+```
+
+### 3. OpenVINO Whisper Models
+
+Pre-converted OpenVINO Whisper models can be placed in `~/whisper.cpp/` or configured in `config.toml`:
+
+```bash
+mkdir -p ~/whisper.cpp
+# Example: Convert or download whisper-small-ov
+# voicectl will automatically compile and cache the NPU binary on first run.
+```
+
+### 4. Install Systemd User Service
+
+```bash
+mkdir -p ~/.config/systemd/user ~/.config/voicectl
+cp config/config.toml ~/.config/voicectl/
+cp config/commands.yaml ~/.config/voicectl/
+cp systemd/voicectl.service ~/.config/systemd/user/
+
+# Install the ultra-fast CLI wrapper
+sudo cp /home/asuna/PycharmProjects/voicectl/scripts/voicectl-wrapper /usr/local/bin/voicectl 2>/dev/null || sudo cp /usr/local/bin/voicectl /usr/local/bin/voicectl
+sudo chmod +x /usr/local/bin/voicectl
+
+# Enable and start user service
+systemctl --user daemon-reload
+systemctl --user enable --now voicectl.service
 ```
 
 ---
 
 ## Hyprland Keybindings
 
-The following global shortcuts are configured in `~/.config/hypr/dms/binds-user.lua`:
+Add to your Hyprland configuration (`~/.config/hypr/hyprland.conf` or DMS `binds-user.lua`):
 
-| Shortcut | Action | Description |
-|---|---|---|
-| `SUPER + ALT + P` | `voicectl mode presentation` | Enable Presentation Mode |
-| `SUPER + ALT + V` | `voicectl mode normal` | Enable Normal Mode |
-| `SUPER + ALT + O` | `voicectl mode off` | Disable Voice Control |
+```ini
+# Voice control mode switching
+bind = SUPER ALT, P, exec, voicectl mode presentation
+bind = SUPER ALT, V, exec, voicectl mode normal
+bind = SUPER ALT, O, exec, voicectl mode off
+bind = SUPER ALT, SPACE, exec, voicectl toggle
+```
 
 ---
 
-## Quickshell / DankMaterialShell (DMS) Widget
+## DankMaterialShell / Quickshell Widget
 
-A native plugin is installed at `~/.config/DankMaterialShell/plugins/voicectl/`:
+A ready-to-use plugin for DankMaterialShell is located in `plugins/voicectl/`:
 
-- **Status Bar Indicator**: Visible on your DankBar (right widgets, next to `hdrToggle`).
-  - `PRESENT` (Slideshow icon): Presentation mode active (wake word not needed).
-  - `VOICE` (Microphone icon): Normal mode active.
-  - `OFF` (Muted microphone icon): Voice control disabled.
-- **Mouse Interactions**:
-  - **Left Click**: Cycles through operating modes (`Presentation` ↔ `Normal` ↔ `Off`).
-  - **Right Click**: Opens interactive popout showing live NPU device status, last recognized command, recognition latency, and one-click mode switches.
-- **Control Center**: Integrated tile in the DMS Control Center.
-- **DMS Settings**: Configure label display and background polling interval under DMS Settings -> Plugins.
+- Copy `plugins/voicectl/` to `~/.config/DankMaterialShell/plugins/voicectl/`.
+- Add `voicectl` to your DankBar widgets in DMS Settings.
+- **Left click**: Cycles modes (`Presentation` ↔ `Normal` ↔ `Off`).
+- **Right click**: Displays popout with live NPU metrics, last recognized utterance, and turnaround latency.
 
 ---
 
 ## Default Voice Commands
 
 ### Presentation Controls
-| Spoken Phrase | Injected Key / Action | Compatible Applications |
+| Spoken Phrase | Injected Keystroke | Compatibility |
 |---|---|---|
-| `next slide`, `next`, `continue`, `go forward` | `Right Arrow` | Impress, PDF, Slides, PowerPoint |
-| `previous slide`, `previous`, `back`, `go back` | `Left Arrow` | Impress, PDF, Slides, PowerPoint |
-| `start presentation`, `start slideshow` | `F5` | LibreOffice Impress, PowerPoint |
-| `exit presentation`, `stop presentation` | `Escape` | Fullscreen presentation exit |
-| `black screen`, `black` | `b` | Blank screen in presentation apps |
-| `white screen`, `white` | `w` | White screen in presentation apps |
+| `next slide`, `next`, `continue`, `forward` | `Right Arrow` | Impress, PDF, Slides, PowerPoint |
+| `previous slide`, `previous`, `back` | `Left Arrow` | Impress, PDF, Slides, PowerPoint |
+| `start presentation`, `start slideshow` | `F5` | LibreOffice Impress, Slides |
+| `exit presentation`, `stop presentation` | `Escape` | Fullscreen exit |
+| `black screen`, `black` | `b` | Blank screen |
+| `white screen`, `white` | `w` | White screen |
 
 ### Audio Controls (WirePlumber)
 | Spoken Phrase | Action | Behavior |
 |---|---|---|
-| `volume up`, `louder`, `turn the volume up` | `wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 0.05+` | +5% volume (capped at 100%) |
+| `volume up`, `louder`, `turn the volume up` | `wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 0.05+` | +5% volume (max 100% cap) |
 | `volume down`, `quieter`, `turn the volume down` | `wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 0.05-` | -5% volume |
 | `mute`, `unmute`, `toggle mute` | `wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle` | Toggle audio mute |
 
@@ -115,111 +183,103 @@ A native plugin is installed at `~/.config/DankMaterialShell/plugins/voicectl/`:
 | `pause`, `stop music`, `pause playback` | `playerctl pause` | Pause playback |
 | `play pause`, `toggle playback` | `playerctl play-pause` | Toggle playback |
 | `next track`, `next song`, `skip track` | `playerctl next` | Skip to next track |
-| `previous track`, `previous song` | `playerctl previous` | Return to previous track |
+| `previous track`, `previous song` | `playerctl previous` | Previous track |
 
 ---
 
-## Configuration
+## CLI Reference
+
+```bash
+# Daemon Service Management
+voicectl start              # Start user systemd service
+voicectl stop               # Stop user systemd service
+voicectl status             # Display live service, NPU device, and latency metrics
+voicectl status --json      # Fast JSON output for desktop bars (executes in ~30ms)
+
+# Mode Controls
+voicectl mode presentation  # Activate low-latency presentation mode (no wake word)
+voicectl mode normal        # Activate conversational natural speech mode
+voicectl mode off           # Disable recognition & power down audio hardware
+voicectl toggle             # Cycle through modes
+
+# Diagnostics
+voicectl devices            # List available PipeWire input devices
+voicectl test-mic           # Record 2s audio and evaluate input RMS energy
+voicectl test-asr           # Test ASR inference on microphone or WAV file
+voicectl test-command "next slide"  # Test command matching & execution
+```
+
+---
+
+## Configuration Reference
 
 Configuration files are located in `~/.config/voicectl/`:
 
-### 1. `~/.config/voicectl/config.toml`
+### `~/.config/voicectl/config.toml`
 
 ```toml
 [general]
 default_mode = "presentation"       # "presentation", "normal", or "off"
 wake_word = "computer"              # Wake word for normal mode
 require_wake_word_normal = false    # Require wake word prefix in normal mode
-notify_on_mode_change = true        # Desktop notification on mode change
-notify_on_command = false           # Desktop notification on each command
+notify_on_mode_change = true        # Desktop notifications on mode change
+notify_on_command = false           # Desktop notification on command dispatch
 log_level = "INFO"
 
 [audio]
-device = "default"                  # Audio device (default PipeWire mic)
+device = "default"                  # Audio device name or "default"
 sample_rate = 16000
 channels = 1
 block_size = 512
+gain = 1.0                         # Software mic gain multiplier (e.g. 1.5 = +3.5dB)
 
 [vad]
-threshold = 0.45                    # Silero VAD probability threshold (0.45 for far-field sensitivity)
-silence_timeout_ms = 220            # Silence duration before ending utterance
-min_speech_duration_ms = 120        # Minimum duration to filter clicks/pops
-max_speech_duration_s = 4.0         # Maximum utterance duration
-pre_roll_ms = 300                   # Pre-roll ring buffer duration (preserves initial phonemes)
+threshold = 0.45                    # Silero VAD activation threshold (0.45 for far-field)
+silence_timeout_ms = 220            # Trailing silence before cutting utterance
+min_speech_duration_ms = 120        # Filter clicks and breath pops
+max_speech_duration_s = 4.0         # Max window duration
+pre_roll_ms = 300                   # Ring buffer to prevent first-syllable clipping
 
 [asr]
 backend = "openvino"
-# Model presets:
-#   "small"       - 244M params, ~270-310ms NPU latency (Default & recommended: robust far-field accuracy + speed)
-#   "large-turbo" - 809M params, ~560-600ms NPU latency (Maximum comprehension, handles conversational complex commands)
-#   "base"        - 74M params, ~120ms NPU latency (Ultra-fast baseline)
-model = "small"
-
-preferred_device = "NPU"            # "NPU", "CPU", or "GPU"
+model = "small"                     # "small", "large-turbo", or "base"
+preferred_device = "NPU"            # "NPU" -> automatic "CPU" fallback
 fallback_device = "CPU"
 language = "en"
 cache_dir = "~/.cache/voicectl/ov_cache"
 
-# Far-field enhancement: Software AGC / Peak normalization & 80Hz rumble filter
-normalize_audio = true              # Software AGC scales distant speech to nominal Whisper level
-highpass_filter = true              # 80 Hz Butterworth filter strips room/fan rumble before AGC
+# Far-field enhancement
+normalize_audio = true              # Peak / AGC normalization
+highpass_filter = true              # 80 Hz Butterworth rumble filter
 
 [volume]
 step = 0.05                         # 5% per volume command
 limit = 1.0                         # 100% volume ceiling cap
 ```
 
-### 2. `~/.config/voicectl/commands.yaml`
-
-Easily add custom aliases or actions:
-
-```yaml
-commands:
-  my_custom_command:
-    description: "My custom action"
-    action:
-      type: key          # "key", "volume", "media", "hyprland", or "script"
-      key: Page_Down
-    phrases:
-      - "page down"
-      - "scroll down"
-    profiles:
-      - presentation
-      - normal
-```
-
 ---
 
-## Troubleshooting & Diagnostics
-
-### Check Service Status
-```bash
-voicectl status
-```
-
-### Inspect Live Logs
-```bash
-journalctl --user -u voicectl -f
-```
+## Troubleshooting
 
 ### Verify Intel NPU Detection
 ```bash
 python -c "import openvino as ov; print(ov.Core().available_devices)"
-# Expected output: ['CPU', 'GPU', 'NPU']
+# Output should include: ['CPU', 'GPU', 'NPU']
 ```
 
-### Check Intel NPU Kernel Module
+### Check NPU Device Permissions
 ```bash
 ls -la /dev/accel/accel0
-dmesg | grep -i intel_vpu
+# Ensure group is 'render' and user has read/write permissions
 ```
 
-### Test Microphone Audio Levels
+### Inspect Live Service Logs
 ```bash
-voicectl test-mic
+journalctl --user -u voicectl.service -f
 ```
 
-### Test ASR Offline Performance
-```bash
-voicectl test-asr
-```
+---
+
+## License
+
+MIT License. Copyright (c) 2026 Johannes Habel.
