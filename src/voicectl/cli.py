@@ -13,12 +13,15 @@ import time
 from pathlib import Path
 from typing import Any
 
-from voicectl.actions.base import get_user_env
-from voicectl.audio import list_input_devices, get_default_microphone_name
-from voicectl.config import Config, DEFAULT_CONFIG_PATH
-from voicectl.daemon import get_socket_path, run_daemon
-
 logger = logging.getLogger(__name__)
+
+
+def get_socket_path() -> Path:
+    """Determine the path to the voicectl IPC socket."""
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir and os.path.isdir(runtime_dir):
+        return Path(runtime_dir) / "voicectl.sock"
+    return Path(f"/tmp/voicectl-{os.getuid()}.sock")
 
 
 def send_ipc_request(request: dict[str, Any], timeout: float = 2.0) -> dict[str, Any] | None:
@@ -154,6 +157,7 @@ def cmd_mode(args: argparse.Namespace) -> None:
 
 def cmd_devices(args: argparse.Namespace) -> None:
     """List available audio capture devices."""
+    from voicectl.audio import list_input_devices
     devices = list_input_devices()
     print("Available audio input devices:")
     print("------------------------------------------------------------")
@@ -168,6 +172,7 @@ def cmd_test_mic(args: argparse.Namespace) -> None:
     """Record 2 seconds of audio to test microphone capture and levels."""
     import numpy as np
     import sounddevice as sd
+    from voicectl.audio import get_default_microphone_name
 
     duration = 2.0
     sr = 16000
@@ -248,6 +253,7 @@ def cmd_test_command(args: argparse.Namespace) -> None:
         return
 
     # If daemon not running, test locally with CommandMatcher
+    from voicectl.config import Config
     from voicectl.commands import CommandMatcher, normalize_text
     cfg = Config.load()
     matcher = CommandMatcher(cfg)
@@ -269,6 +275,7 @@ def cmd_test_command(args: argparse.Namespace) -> None:
 
 def cmd_run(args: argparse.Namespace) -> None:
     """Run voicectl daemon directly in the foreground."""
+    from voicectl.daemon import run_daemon
     run_daemon(args.config)
 
 

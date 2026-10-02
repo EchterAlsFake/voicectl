@@ -64,6 +64,9 @@ class VoiceCtlDaemon:
 
         self._running = False
         self._shutdown_event = threading.Event()
+        self._mode_event = threading.Event()
+        if self.mode != "off":
+            self._mode_event.set()
 
         # Initialize subsystems
         logger.info("Initializing voicectl daemon in '%s' mode...", self.mode)
@@ -88,7 +91,22 @@ class VoiceCtlDaemon:
         old_mode = self.mode
         self.mode = clean_mode
         self.vad.reset()
-        self.vad.set_max_duration(2.0 if self.mode == "presentation" else 4.5)
+
+        if self.mode == "off":
+            self._mode_event.clear()
+            if self.audio.is_active():
+                logger.info("Stopping audio capture in OFF mode to preserve power...")
+                self.audio.stop()
+        else:
+            self.vad.set_max_duration(2.0 if self.mode == "presentation" else 4.5)
+            if not self.audio.is_active():
+                logger.info("Resuming audio capture for '%s' mode...", self.mode)
+                try:
+                    self.audio.start()
+                except Exception as e:
+                    logger.error("Failed to start audio capture: %s", e)
+            self._mode_event.set()
+
         logger.info("Operating mode changed: %s -> %s", old_mode, self.mode)
 
         if self.config.general.notify_on_mode_change:
@@ -201,7 +219,11 @@ class VoiceCtlDaemon:
         """Start the voicectl daemon processing loop."""
         self._running = True
         self._start_ipc_server()
-        self.audio.start()
+        if self.mode != "off":
+            self.audio.start()
+            self._mode_event.set()
+        else:
+            self._mode_event.clear()
 
         if self.config.general.notify_on_mode_change:
             send_desktop_notification("voicectl", f"Started in {self.mode} mode ({self.asr.device_name})")
@@ -211,12 +233,13 @@ class VoiceCtlDaemon:
 
         try:
             while self._running and not self._shutdown_event.is_set():
-                chunk = self.audio.read_block(timeout=0.2)
-                if chunk is None:
+                if self.mode == "off":
+                    # In off mode, audio is stopped. Sleep cleanly with zero CPU usage.
+                    self._mode_event.wait(timeout=0.5)
                     continue
 
-                if self.mode == "off":
-                    # In off mode, discard audio without running VAD or ASR
+                chunk = self.audio.read_block(timeout=0.2)
+                if chunk is None:
                     continue
 
                 # Pass chunk to VAD
@@ -273,6 +296,7 @@ class VoiceCtlDaemon:
         self._running = False
         logger.info("Shutting down voicectl daemon...")
         self._shutdown_event.set()
+        self._mode_event.set()
 
         self.audio.stop()
 
