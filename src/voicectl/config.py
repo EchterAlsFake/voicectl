@@ -25,11 +25,11 @@ class AudioConfig:
 
 @dataclass(slots=True)
 class VADConfig:
-    threshold: float = 0.5
-    silence_timeout_ms: int = 400
-    min_speech_duration_ms: int = 180
-    max_speech_duration_s: float = 8.0
-    pre_roll_ms: int = 300
+    threshold: float = 0.55
+    silence_timeout_ms: int = 220
+    min_speech_duration_ms: int = 120
+    max_speech_duration_s: float = 4.0
+    pre_roll_ms: int = 200
 
 
 @dataclass(slots=True)
@@ -100,11 +100,11 @@ class Config:
                 block_size=int(aud_data.get("block_size", 512)),
             ),
             vad=VADConfig(
-                threshold=float(vad_data.get("threshold", 0.5)),
-                silence_timeout_ms=int(vad_data.get("silence_timeout_ms", 400)),
-                min_speech_duration_ms=int(vad_data.get("min_speech_duration_ms", 180)),
-                max_speech_duration_s=float(vad_data.get("max_speech_duration_s", 8.0)),
-                pre_roll_ms=int(vad_data.get("pre_roll_ms", 300)),
+                threshold=float(vad_data.get("threshold", 0.55)),
+                silence_timeout_ms=int(vad_data.get("silence_timeout_ms", 220)),
+                min_speech_duration_ms=int(vad_data.get("min_speech_duration_ms", 120)),
+                max_speech_duration_s=float(vad_data.get("max_speech_duration_s", 4.0)),
+                pre_roll_ms=int(vad_data.get("pre_roll_ms", 200)),
             ),
             asr=ASRConfig(
                 backend=asr_data.get("backend", "openvino"),

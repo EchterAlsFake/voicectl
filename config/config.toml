@@ -22,12 +22,12 @@ channels = 1
 block_size = 512
 
 [vad]
-# Silero VAD (ONNX)
-threshold = 0.5
-silence_timeout_ms = 400
-min_speech_duration_ms = 180
-max_speech_duration_s = 8.0
-pre_roll_ms = 300
+# Low-latency Silero VAD (ONNX) with dual-threshold hysteresis
+threshold = 0.55
+silence_timeout_ms = 220
+min_speech_duration_ms = 120
+max_speech_duration_s = 4.0
+pre_roll_ms = 200
 
 [asr]
 # Speech recognition backend

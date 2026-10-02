@@ -70,6 +70,7 @@ class VoiceCtlDaemon:
         self.matcher = CommandMatcher(self.config)
         self.audio = AudioCapture(self.config.audio, pre_roll_ms=self.config.vad.pre_roll_ms)
         self.vad = SileroVADDetector(self.config.vad, sample_rate=self.config.audio.sample_rate)
+        self.vad.set_max_duration(2.0 if self.mode == "presentation" else 4.5)
         self.asr: ASRBackend = create_asr_backend(self.config.asr)
 
         self.socket_path = get_socket_path()
@@ -87,6 +88,7 @@ class VoiceCtlDaemon:
         old_mode = self.mode
         self.mode = clean_mode
         self.vad.reset()
+        self.vad.set_max_duration(2.0 if self.mode == "presentation" else 4.5)
         logger.info("Operating mode changed: %s -> %s", old_mode, self.mode)
 
         if self.config.general.notify_on_mode_change:
