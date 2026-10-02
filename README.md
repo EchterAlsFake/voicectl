@@ -141,19 +141,28 @@ channels = 1
 block_size = 512
 
 [vad]
-threshold = 0.5                     # Silero VAD probability threshold
-silence_timeout_ms = 400            # Silence duration before ending utterance
-min_speech_duration_ms = 180        # Minimum duration to filter clicks/pops
-max_speech_duration_s = 8.0         # Maximum utterance duration
-pre_roll_ms = 300                   # Pre-roll ring buffer duration
+threshold = 0.45                    # Silero VAD probability threshold (0.45 for far-field sensitivity)
+silence_timeout_ms = 220            # Silence duration before ending utterance
+min_speech_duration_ms = 120        # Minimum duration to filter clicks/pops
+max_speech_duration_s = 4.0         # Maximum utterance duration
+pre_roll_ms = 300                   # Pre-roll ring buffer duration (preserves initial phonemes)
 
 [asr]
 backend = "openvino"
-model_path = "/home/asuna/whisper.cpp/whisper-base-ov"
+# Model presets:
+#   "small"       - 244M params, ~270-310ms NPU latency (Default & recommended: robust far-field accuracy + speed)
+#   "large-turbo" - 809M params, ~560-600ms NPU latency (Maximum comprehension, handles conversational complex commands)
+#   "base"        - 74M params, ~120ms NPU latency (Ultra-fast baseline)
+model = "small"
+
 preferred_device = "NPU"            # "NPU", "CPU", or "GPU"
 fallback_device = "CPU"
 language = "en"
 cache_dir = "~/.cache/voicectl/ov_cache"
+
+# Far-field enhancement: Software AGC / Peak normalization & 80Hz rumble filter
+normalize_audio = true              # Software AGC scales distant speech to nominal Whisper level
+highpass_filter = true              # 80 Hz Butterworth filter strips room/fan rumble before AGC
 
 [volume]
 step = 0.05                         # 5% per volume command
