@@ -36,7 +36,7 @@ model_path = "/home/asuna/whisper.cpp/whisper-base-ov"
 # Hardware inference device priority: NPU -> CPU fallback
 preferred_device = "NPU"
 fallback_device = "CPU"
-language = "en"
+language = "auto"
 cache_dir = "~/.cache/voicectl/ov_cache"
 
 [volume]

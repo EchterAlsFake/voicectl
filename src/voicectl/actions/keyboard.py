@@ -69,3 +69,42 @@ class KeyAction(Action):
         except Exception as e:
             logger.error("Error executing key action %s: %s", self.key_sym, e)
             return False
+
+
+class TypeTextAction(Action):
+    """Types text directly into the focused Wayland window using wtype."""
+
+    def __init__(self, text: str, delay_ms: int = 1) -> None:
+        self.text = text
+        self.delay_ms = delay_ms
+
+    @property
+    def description(self) -> str:
+        preview = self.text if len(self.text) <= 30 else self.text[:27] + "..."
+        return f"type:{preview!r}"
+
+    def execute(self) -> bool:
+        if not shutil.which("wtype"):
+            logger.error("wtype is not installed or not in PATH")
+            return False
+
+        if not self.text:
+            return True
+
+        cmd = ["wtype"]
+        if self.delay_ms > 0:
+            cmd.extend(["-d", str(self.delay_ms)])
+        cmd.extend(["--", self.text])
+
+        env = get_user_env()
+        try:
+            logger.debug("Executing type action: text_len=%d (WAYLAND_DISPLAY=%s)", len(self.text), env.get("WAYLAND_DISPLAY"))
+            res = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=10.0)
+            if res.returncode != 0:
+                logger.error("wtype failed (code %d): %s", res.returncode, res.stderr.strip())
+                return False
+            return True
+        except Exception as e:
+            logger.error("Error executing type action: %s", e)
+            return False
+

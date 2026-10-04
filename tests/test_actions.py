@@ -1,11 +1,13 @@
 """Unit tests for allowlisted action dispatchers."""
 
 import pytest
-from voicectl.actions.keyboard import KeyAction, KEY_MAP
+from unittest.mock import patch
+from voicectl.actions.keyboard import KeyAction, TypeTextAction, KEY_MAP
 from voicectl.actions.audio import VolumeAction
 from voicectl.actions.media import MediaAction, ALLOWLISTED_PLAYERCTL_COMMANDS
 from voicectl.actions.hyprland import HyprlandAction, ALLOWLISTED_HYPRLAND_DISPATCHERS
 from voicectl.actions.script import ScriptAction
+from voicectl.actions.screenshot import ScreenshotAction
 
 
 def test_keyboard_action_mapping():
@@ -66,3 +68,68 @@ def test_script_action_security(tmp_path):
     test_file.write_text("#!/bin/sh\necho hello\n")
     with pytest.raises(PermissionError):
         ScriptAction(str(test_file))
+
+
+def test_screenshot_action_mapping():
+    act = ScreenshotAction()
+    assert act.mode == "region"
+    assert act.clipboard is True
+    assert act.description == "screenshot:region:with_clipboard"
+
+    act_no_clip = ScreenshotAction(clipboard=False)
+    assert act_no_clip.mode == "region"
+    assert act_no_clip.clipboard is False
+    assert act_no_clip.description == "screenshot:region:no_clipboard"
+
+    act_full = ScreenshotAction(mode="full", clipboard=False)
+    assert act_full.mode == "full"
+    assert act_full.description == "screenshot:full:no_clipboard"
+
+    with pytest.raises(ValueError):
+        ScreenshotAction(mode="invalid_mode")
+
+
+@patch("shutil.which")
+@patch("subprocess.Popen")
+def test_screenshot_action_execution_dms(mock_popen, mock_which):
+    mock_which.side_effect = lambda cmd: "/usr/bin/dms" if cmd == "dms" else None
+
+    # Screenshot with clipboard
+    act = ScreenshotAction(mode="region", clipboard=True)
+    assert act.execute() is True
+    mock_popen.assert_called_with(["dms", "screenshot"], env=mock_popen.call_args.kwargs["env"])
+
+    # Screenshot without clipboard
+    act_no_clip = ScreenshotAction(mode="region", clipboard=False)
+    assert act_no_clip.execute() is True
+    mock_popen.assert_called_with(["dms", "screenshot", "--no-clipboard"], env=mock_popen.call_args.kwargs["env"])
+
+    # Full screenshot without clipboard
+    act_full_no_clip = ScreenshotAction(mode="full", clipboard=False)
+    assert act_full_no_clip.execute() is True
+    mock_popen.assert_called_with(["dms", "screenshot", "full", "--no-clipboard"], env=mock_popen.call_args.kwargs["env"])
+
+
+def test_type_text_action():
+    act = TypeTextAction("Hello world!")
+    assert "type:'Hello world!'" in act.description
+    assert act.text == "Hello world!"
+    assert act.delay_ms == 1
+
+    act_long = TypeTextAction("This is a very long text that exceeds thirty characters")
+    assert act_long.description.endswith("...'")
+
+
+@patch("shutil.which")
+@patch("subprocess.run")
+def test_type_text_action_execution(mock_run, mock_which):
+    mock_which.return_value = "/usr/bin/wtype"
+    mock_run.return_value.returncode = 0
+
+    act = TypeTextAction("Hello from Jarvis", delay_ms=2)
+    assert act.execute() is True
+    mock_run.assert_called_once()
+    args, kwargs = mock_run.call_args
+    assert args[0] == ["wtype", "-d", "2", "--", "Hello from Jarvis"]
+
+

@@ -98,3 +98,46 @@ def test_wake_word_requirement():
     cmd = matcher.match("computer volume up", mode="normal")
     assert cmd is not None
     assert cmd.id == "volume_up"
+
+
+def test_screenshot_command_matching():
+    config = Config()
+    matcher = CommandMatcher(config)
+
+    # Presentation mode
+    cmd_ps = matcher.match("Screenshot", mode="presentation")
+    assert cmd_ps is not None
+    assert cmd_ps.id == "screenshot"
+
+    cmd_ps_nc = matcher.match("Screenshot without clipboard", mode="presentation")
+    assert cmd_ps_nc is not None
+    assert cmd_ps_nc.id == "screenshot_no_clipboard"
+
+    # Normal mode
+    cmd_nm = matcher.match("screenshot", mode="normal")
+    assert cmd_nm is not None
+    assert cmd_nm.id == "screenshot"
+
+    cmd_nm_take = matcher.match("please take a screenshot", mode="normal")
+    assert cmd_nm_take is not None
+    assert cmd_nm_take.id == "screenshot"
+
+    cmd_nm_nc = matcher.match("Screenshot without clipboard", mode="normal")
+    assert cmd_nm_nc is not None
+    assert cmd_nm_nc.id == "screenshot_no_clipboard"
+
+    cmd_nm_nc_fill = matcher.match("can you take a screenshot without clipboard", mode="normal")
+    assert cmd_nm_nc_fill is not None
+    assert cmd_nm_nc_fill.id == "screenshot_no_clipboard"
+
+
+def test_parse_action_from_dict_type():
+    from voicectl.commands import parse_action_from_dict
+    from voicectl.actions.keyboard import TypeTextAction
+    cfg = Config()
+    act = parse_action_from_dict({"type": "type", "text": "Test message", "delay": 2}, cfg)
+    assert isinstance(act, TypeTextAction)
+    assert act.text == "Test message"
+    assert act.delay_ms == 2
+
+

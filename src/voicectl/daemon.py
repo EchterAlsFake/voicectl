@@ -17,10 +17,11 @@ from typing import Any
 import numpy as np
 
 from voicectl.actions.base import get_user_env
+from voicectl.actions.music import MusicNotFoundAction
 from voicectl.asr.base import ASRBackend
 from voicectl.asr.factory import create_asr_backend
 from voicectl.audio import AudioCapture, get_default_microphone_name
-from voicectl.commands import CommandMatcher
+from voicectl.commands import CommandDefinition, CommandMatcher
 from voicectl.config import Config, DEFAULT_CONFIG_PATH
 from voicectl.vad import SileroVADDetector
 
@@ -98,7 +99,8 @@ class VoiceCtlDaemon:
                 logger.info("Stopping audio capture in OFF mode to preserve power...")
                 self.audio.stop()
         else:
-            self.vad.set_max_duration(2.0 if self.mode == "presentation" else 4.5)
+            normal_max = max(6.0, getattr(self.config.vad, "max_speech_duration_s", 6.0))
+            self.vad.set_max_duration(2.0 if self.mode == "presentation" else normal_max)
             if not self.audio.is_active():
                 logger.info("Resuming audio capture for '%s' mode...", self.mode)
                 try:
@@ -264,6 +266,15 @@ class VoiceCtlDaemon:
 
                 # Match against allowlisted commands
                 cmd = self.matcher.match(transcript_clean, mode=self.mode)
+
+                # English Whisper can't spell Ukrainian/Russian titles ("Тримай" -> "3-Mai").
+                # If a "play …" request found nothing, re-transcribe the same audio natively.
+                if self._needs_native_music_pass(cmd, transcript_clean):
+                    native_cmd, native_dt_ms = self._native_music_pass(utterance, transcript_clean)
+                    asr_dt_ms += native_dt_ms
+                    if native_cmd is not None:
+                        cmd = native_cmd
+
                 if cmd is None:
                     logger.debug("No matching command in mode '%s' for: \"%s\"", self.mode, transcript_clean)
                     continue
@@ -288,6 +299,36 @@ class VoiceCtlDaemon:
             logger.info("Keyboard interrupt received.")
         finally:
             self.stop()
+
+    def _needs_native_music_pass(self, cmd: CommandDefinition | None, transcript: str) -> bool:
+        if self.mode != "normal" or not self.config.asr.music_fallback_language:
+            return False
+        if cmd is not None and not isinstance(cmd.action, MusicNotFoundAction):
+            return False
+        return self.matcher.parser.is_play_request(transcript)
+
+    def _native_music_pass(self, utterance: np.ndarray, english_text: str) -> tuple[CommandDefinition | None, float]:
+        lang = self.config.asr.music_fallback_language
+        try:
+            native_text, dt_ms = self.asr.transcribe(utterance, language=lang)
+        except Exception as e:
+            logger.warning("Native-language (%s) music pass failed: %s", lang, e)
+            return None, 0.0
+
+        logger.info("Native transcript [%s]: \"%s\" (ASR latency: %.1fms)", lang, native_text.strip(), dt_ms)
+        action = self.matcher.parser.parse_music_query(native_text)
+        if action is None:
+            return None, dt_ms
+        return (
+            CommandDefinition(
+                id="dynamic_action",
+                action=action,
+                phrases=[english_text],
+                description=action.description,
+                profiles=["normal"],
+            ),
+            dt_ms,
+        )
 
     def stop(self) -> None:
         """Gracefully stop all daemon subsystems."""

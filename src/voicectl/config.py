@@ -45,7 +45,9 @@ class ASRConfig:
     model_path: str = ""       # Optional explicit path override
     preferred_device: str = "NPU"
     fallback_device: str = "CPU"
-    language: str = "en"
+    language: str = "auto"
+    # Re-transcribe unresolved "play …" commands in this language (e.g. "uk", "ru"); "" disables
+    music_fallback_language: str = "uk"
     cache_dir: str = os.path.expanduser("~/.cache/voicectl/ov_cache")
     normalize_audio: bool = True  # Software AGC / Peak normalization for far-field capture
     highpass_filter: bool = True  # 80 Hz high-pass rumble filter
@@ -133,7 +135,8 @@ class Config:
                 model_path=asr_data.get("model_path", ""),
                 preferred_device=asr_data.get("preferred_device", "NPU"),
                 fallback_device=asr_data.get("fallback_device", "CPU"),
-                language=asr_data.get("language", "en"),
+                language=asr_data.get("language", "auto"),
+                music_fallback_language=str(asr_data.get("music_fallback_language", "uk")),
                 cache_dir=asr_data.get("cache_dir", os.path.expanduser("~/.cache/voicectl/ov_cache")),
                 normalize_audio=bool(asr_data.get("normalize_audio", True)),
                 highpass_filter=bool(asr_data.get("highpass_filter", True)),

@@ -118,15 +118,18 @@ class OpenVINOASR(ASRBackend):
             padded[:len(audio)] = audio
             audio = padded
 
-        lang_tag = f"<|{language}|>" if not language.startswith("<|") else language
+        gen_kwargs: dict = {
+            "task": "transcribe",
+            "max_new_tokens": 128,
+        }
+        if language and str(language).lower() not in ("auto", "none", ""):
+            gen_kwargs["language"] = f"<|{language}|>" if not str(language).startswith("<|") else language
 
         t0 = time.perf_counter()
         try:
             res = self._pipe.generate(
                 audio.tolist(),
-                language=lang_tag,
-                task="transcribe",
-                max_new_tokens=32
+                **gen_kwargs,
             )
         except Exception as e:
             if self._active_device != "CPU":
@@ -136,9 +139,7 @@ class OpenVINOASR(ASRBackend):
                 t0 = time.perf_counter()
                 res = self._pipe.generate(
                     audio.tolist(),
-                    language=lang_tag,
-                    task="transcribe",
-                    max_new_tokens=32
+                    **gen_kwargs,
                 )
             else:
                 raise

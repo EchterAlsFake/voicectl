@@ -10,12 +10,18 @@ from typing import Any
 import yaml
 
 from voicectl.actions.base import Action
-from voicectl.actions.keyboard import KeyAction
+from voicectl.actions.keyboard import KeyAction, TypeTextAction
 from voicectl.actions.audio import VolumeAction
 from voicectl.actions.media import MediaAction
 from voicectl.actions.hyprland import HyprlandAction
 from voicectl.actions.script import ScriptAction
+from voicectl.actions.screenshot import ScreenshotAction
+from voicectl.actions.brightness import BrightnessAction
+from voicectl.actions.power import PowerProfileAction
+from voicectl.actions.app import AppLauncherAction
+from voicectl.actions.compound import CompoundAction
 from voicectl.config import Config
+from voicectl.parser import NaturalCommandParser
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +53,16 @@ def clean_natural_speech(text: str, wake_word: str | None = None) -> str:
     """Clean natural speech by optionally stripping wake word and leading fillers."""
     normalized = normalize_text(text)
 
-    # Strip wake word if present at the start
+    # Strip wake word if present at the start (check configured wake word + jarvis/computer)
+    ww_candidates = {"jarvis", "computer"}
     if wake_word:
-        ww_clean = normalize_text(wake_word)
-        pattern = rf"^{re.escape(ww_clean)}\b\s*"
-        normalized = re.sub(pattern, "", normalized).strip()
+        ww_candidates.add(normalize_text(wake_word))
+
+    for ww in ww_candidates:
+        pattern = rf"^(?:hey\s+|hi\s+|ok\s+)?{re.escape(ww)}\b\s*"
+        if re.search(pattern, normalized):
+            normalized = re.sub(pattern, "", normalized).strip()
+            break
 
     # Strip conversational fillers
     for filler in COMMON_FILLERS:
@@ -199,6 +210,52 @@ def build_default_commands(config: Config) -> dict[str, CommandDefinition]:
             description="Toggle active window fullscreen",
             profiles=["normal"],
         ),
+
+        # Screenshot controls
+        CommandDefinition(
+            id="screenshot",
+            action=ScreenshotAction(mode="region", clipboard=True),
+            phrases=[
+                "screenshot",
+                "take screenshot",
+                "take a screenshot",
+                "do screenshot",
+                "do a screenshot",
+                "make screenshot",
+                "make a screenshot",
+                "capture screen",
+                "screen capture",
+                "screen shot",
+                "take screen shot",
+                "take a screen shot",
+            ],
+            description="Take a screenshot (saves and copies to clipboard)",
+            profiles=["presentation", "normal"],
+        ),
+        CommandDefinition(
+            id="screenshot_no_clipboard",
+            action=ScreenshotAction(mode="region", clipboard=False),
+            phrases=[
+                "screenshot without clipboard",
+                "screenshot no clipboard",
+                "take screenshot without clipboard",
+                "take a screenshot without clipboard",
+                "do screenshot without clipboard",
+                "do a screenshot without clipboard",
+                "make screenshot without clipboard",
+                "make a screenshot without clipboard",
+                "screen shot without clipboard",
+                "take screen shot without clipboard",
+                "take a screen shot without clipboard",
+                "capture screen without clipboard",
+                "screen capture without clipboard",
+                "screenshot without the clipboard",
+                "take screenshot without the clipboard",
+                "take a screenshot without the clipboard",
+            ],
+            description="Take a screenshot without copying to clipboard",
+            profiles=["presentation", "normal"],
+        ),
     ]
 
     return {cmd.id: cmd for cmd in defs}
@@ -217,7 +274,35 @@ def parse_action_from_dict(action_data: dict[str, Any], config: Config) -> Actio
         sub_type = str(action_data.get("action", "up")).lower()
         step = float(action_data.get("step", config.volume.step))
         limit = float(action_data.get("limit", config.volume.limit))
-        return VolumeAction(action_type=sub_type, step=step, limit=limit)
+        val = action_data.get("value")
+        val_float = float(val) if val is not None else None
+        return VolumeAction(action_type=sub_type, step=step, limit=limit, value=val_float)
+
+    elif act_type == "brightness":
+        val = int(action_data.get("value", 50))
+        rel = bool(action_data.get("relative", False))
+        step_dir = str(action_data.get("step", ""))
+        return BrightnessAction(value=val, relative=rel, step=step_dir)
+
+    elif act_type in ("power", "power_profile"):
+        prof = str(action_data.get("profile", "balanced"))
+        return PowerProfileAction(profile=prof)
+
+    elif act_type == "app":
+        app_name = str(action_data.get("app", ""))
+        exec_cmd = action_data.get("exec", app_name)
+        target = action_data.get("target")
+        return AppLauncherAction(app_name=app_name, exec_cmd=exec_cmd, target_arg=target)
+
+    elif act_type == "compound":
+        sub_list = action_data.get("actions", [])
+        sub_actions = []
+        for s in sub_list:
+            if isinstance(s, dict):
+                act = parse_action_from_dict(s, config)
+                if act:
+                    sub_actions.append(act)
+        return CompoundAction(actions=sub_actions)
 
     elif act_type == "media":
         cmd = str(action_data.get("command", "play-pause"))
@@ -232,6 +317,16 @@ def parse_action_from_dict(action_data: dict[str, Any], config: Config) -> Actio
         path = str(action_data.get("path", ""))
         return ScriptAction(script_path=path)
 
+    elif act_type == "screenshot":
+        clipboard = bool(action_data.get("clipboard", True))
+        mode = str(action_data.get("mode", "region"))
+        return ScreenshotAction(mode=mode, clipboard=clipboard)
+
+    elif act_type in ("type", "type_text", "typing"):
+        text = str(action_data.get("text", ""))
+        delay = int(action_data.get("delay", 1))
+        return TypeTextAction(text=text, delay_ms=delay)
+
     logger.warning("Unknown action type: %s", act_type)
     return None
 
@@ -239,9 +334,10 @@ def parse_action_from_dict(action_data: dict[str, Any], config: Config) -> Actio
 class CommandMatcher:
     """Matches speech transcripts to allowlisted commands according to active profile."""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, parser: NaturalCommandParser | None = None) -> None:
         self.config = config
         self.commands: dict[str, CommandDefinition] = {}
+        self.parser = parser or NaturalCommandParser(config)
         self.load_commands()
 
     def load_commands(self) -> None:
@@ -317,20 +413,18 @@ class CommandMatcher:
 
         elif mode == "normal":
             # Normal mode
-            cleaned = norm
-            if self.config.general.require_wake_word_normal:
-                ww = normalize_text(self.config.general.wake_word)
-                if not norm.startswith(ww):
-                    logger.debug("Normal mode: wake word '%s' missing from '%s'", ww, norm)
-                    return None
-                cleaned = clean_natural_speech(norm, wake_word=ww)
-            else:
-                cleaned = clean_natural_speech(norm)
+            # Check wake word requirement if configured
+            ww_cleaned, had_wake = self.parser.strip_wake_word(norm)
+            if self.config.general.require_wake_word_normal and not had_wake:
+                logger.debug("Normal mode: required wake word missing from '%s'", norm)
+                return None
+
+            cleaned = clean_natural_speech(norm, wake_word=self.config.general.wake_word)
 
             if not cleaned:
                 return None
 
-            # First check exact match on cleaned utterance
+            # 1. Exact match on cleaned utterance against static commands
             for cmd in self.commands.values():
                 if "normal" not in cmd.profiles:
                     continue
@@ -339,7 +433,7 @@ class CommandMatcher:
                     if cleaned == p_norm:
                         return cmd
 
-            # Check with article stripping (e.g. "pause the music" -> "pause music")
+            # 2. Check with article stripping (e.g. "pause the music" -> "pause music")
             cleaned_no_art = strip_articles(cleaned)
             for cmd in self.commands.values():
                 if "normal" not in cmd.profiles:
@@ -349,16 +443,34 @@ class CommandMatcher:
                     if cleaned_no_art == p_no_art:
                         return cmd
 
-            # Check if cleaned utterance ends with or equals one of the command phrases
+            # 3. Dynamic natural command & compound action parsing (prioritized over loose suffix match)
+            dynamic_act = self.parser.parse(raw_transcript)
+            if dynamic_act:
+                return CommandDefinition(
+                    id="dynamic_action",
+                    action=dynamic_act,
+                    phrases=[raw_transcript],
+                    description=dynamic_act.description,
+                    profiles=["normal"],
+                )
+
+            # 4. Check if cleaned utterance ends with one of the specific command phrases
+            all_pairs = []
             for cmd in self.commands.values():
                 if "normal" not in cmd.profiles:
                     continue
                 for phrase in cmd.phrases:
                     p_norm = normalize_text(phrase)
-                    if p_norm and (cleaned == p_norm or cleaned.endswith(" " + p_norm)):
-                        return cmd
-                    p_no_art = strip_articles(p_norm)
-                    if p_no_art and (cleaned_no_art == p_no_art or cleaned_no_art.endswith(" " + p_no_art)):
-                        return cmd
+                    # Don't loose-suffix match very short single words like "back" or "next"
+                    if p_norm and len(p_norm) > 4:
+                        all_pairs.append((cmd, p_norm, strip_articles(p_norm)))
+
+            all_pairs.sort(key=lambda item: len(item[1]), reverse=True)
+
+            for cmd, p_norm, p_no_art in all_pairs:
+                if cleaned.endswith(" " + p_norm):
+                    return cmd
+                if p_no_art and cleaned_no_art.endswith(" " + p_no_art):
+                    return cmd
 
         return None

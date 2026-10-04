@@ -17,7 +17,7 @@ Designed specifically for low-latency hands-free presentation control and deskto
   - In `OFF` mode, the PipeWire audio input node is completely released, allowing the Intel SoundWire / Audio DSP to enter **D3cold** state and the CPU to drop into package **C8/C10** sleep (0.00% daemon CPU).
   - The CLI client (`/usr/local/bin/voicectl`) features an instant C-socket IPC path that queries status in **~30–40 ms** with zero Python ML library import overhead.
 - **Wayland Native Virtual Keyboard**: Dispatches keystrokes via `wtype` over the native Wayland virtual keyboard protocol (`zwp_virtual_keyboard_v1`). No `/dev/uinput` root permissions or legacy X11 tools required.
-- **Strict Security Allowlisting**: **`shell=True` is prohibited**. Spoken phrases can only trigger explicitly configured actions (`key`, `volume`, `media`, `hyprland`, or pre-configured scripts). Arbitrary spoken shell execution is impossible.
+- **Strict Security Allowlisting**: **`shell=True` is prohibited**. Spoken phrases can only trigger explicitly configured actions (`key`, `volume`, `media`, `hyprland`, `screenshot`, or pre-configured scripts). Arbitrary spoken shell execution is impossible.
 - **Quickshell & DankMaterialShell (DMS) Widget**: Includes a ready-to-use status bar widget with live mode display, single-click toggle, and popout diagnostics.
 
 ---
@@ -185,7 +185,24 @@ A ready-to-use plugin for DankMaterialShell is located in `plugins/voicectl/`:
 | `next track`, `next song`, `skip track` | `playerctl next` | Skip to next track |
 | `previous track`, `previous song` | `playerctl previous` | Previous track |
 
+### Screenshot Controls (DMS / grim)
+| Spoken Phrase | Action | Behavior |
+|---|---|---|
+| `screenshot`, `take screenshot`, `capture screen` | `dms screenshot` | Interactive region capture (file + clipboard) |
+| `screenshot without clipboard`, `take screenshot without clipboard` | `dms screenshot --no-clipboard` | Interactive region capture (file only, no clipboard) |
+
+### Dictation & Voice Typing (English & German)
+*Direct text injection into currently focused Wayland window via `wtype` (Normal Mode).*
+
+| Spoken Phrase (English) | Spoken Phrase (German) | Action / Injected Output |
+|---|---|---|
+| `Jarvis write the following: <text>` | `Jarvis schreibe folgendes: <text>` | Injects `<text>` into the active window |
+| `Jarvis type the following: <text>` | `Jarvis tippe folgendes: <text>` | Injects `<text>` into the active window |
+| `Jarvis write down: <text>` | `Jarvis schreib auf: <text>` | Injects `<text>` into the active window |
+| `Jarvis write: <text>` / `Jarvis type: <text>` | `Jarvis schreibe: <text>` / `Jarvis tippe: <text>` | Injects `<text>` into the active window |
+
 ---
+
 
 ## CLI Reference
 

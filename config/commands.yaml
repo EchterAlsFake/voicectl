@@ -2,11 +2,12 @@
 # Default location: ~/.config/voicectl/commands.yaml
 #
 # Supported action types:
-#   key:      Simulates Wayland keypress via wtype (key: Right, Left, F5, Escape, space, etc.)
-#   volume:   WirePlumber volume action (action: up | down | mute, step: 0.05, limit: 1.0)
-#   media:    MPRIS media playback (command: play | pause | play-pause | next | previous)
-#   hyprland: Safe Hyprland dispatcher (dispatcher: fullscreen | workspace, args: "")
-#   script:   Explicit safe script file execution (path: ~/.config/voicectl/scripts/myscript.sh)
+#   key:        Simulates Wayland keypress via wtype (key: Right, Left, F5, Escape, space, etc.)
+#   volume:     WirePlumber volume action (action: up | down | mute, step: 0.05, limit: 1.0)
+#   media:      MPRIS media playback (command: play | pause | play-pause | next | previous)
+#   hyprland:   Safe Hyprland dispatcher (dispatcher: fullscreen | workspace, args: "")
+#   script:     Explicit safe script file execution (path: ~/.config/voicectl/scripts/myscript.sh)
+#   screenshot: Safe screenshot action (clipboard: true | false, mode: region | full)
 
 commands:
   next_slide:
@@ -231,3 +232,52 @@ commands:
       - "toggle fullscreen"
     profiles:
       - normal
+
+  screenshot:
+    description: "Take a screenshot"
+    action:
+      type: screenshot
+      clipboard: true
+    phrases:
+      - "screenshot"
+      - "take screenshot"
+      - "take a screenshot"
+      - "do screenshot"
+      - "do a screenshot"
+      - "make screenshot"
+      - "make a screenshot"
+      - "capture screen"
+      - "screen capture"
+      - "screen shot"
+      - "take screen shot"
+      - "take a screen shot"
+    profiles:
+      - presentation
+      - normal
+
+  screenshot_no_clipboard:
+    description: "Take a screenshot without copying to clipboard"
+    action:
+      type: screenshot
+      clipboard: false
+    phrases:
+      - "screenshot without clipboard"
+      - "screenshot no clipboard"
+      - "take screenshot without clipboard"
+      - "take a screenshot without clipboard"
+      - "do screenshot without clipboard"
+      - "do a screenshot without clipboard"
+      - "make screenshot without clipboard"
+      - "make a screenshot without clipboard"
+      - "screen shot without clipboard"
+      - "take screen shot without clipboard"
+      - "take a screen shot without clipboard"
+      - "capture screen without clipboard"
+      - "screen capture without clipboard"
+      - "screenshot without the clipboard"
+      - "take screenshot without the clipboard"
+      - "take a screenshot without the clipboard"
+    profiles:
+      - presentation
+      - normal
+
